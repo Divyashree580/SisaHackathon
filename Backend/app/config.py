@@ -2,14 +2,16 @@ import os
 from dotenv import load_dotenv
 
 # Load env variables from .env if present
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(dotenv_path=env_path)
+
 
 class Settings:
     PROJECT_NAME: str = "SISA Sentinel API"
     PROJECT_VERSION: str = "1.0.0"
     
     # Groq API Configurations
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     
     # MongoDB Configuration
@@ -18,7 +20,7 @@ class Settings:
     
     # NVD API Configuration
     NVD_API_URL: str = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-    NVD_API_KEY: str = os.getenv("NVD_API_KEY", "")
+    NVD_API_KEY: str = os.getenv("NVD_API_KEY")
     NVD_TIMEOUT_SECONDS: int = 5
     
     # CORS Configurations
