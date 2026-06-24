@@ -12,7 +12,7 @@ import OverviewDashboard from './components/OverviewDashboard';
 import SystemHealth from './components/SystemHealth';
 import RuleEngineHub from './components/RuleEngineHub';
 import { api, loadHistoryFromStorage } from './services/api';
-import { Activity, ShieldAlert, BookOpen, Layers } from 'lucide-react';
+import { Activity, ShieldAlert, BookOpen, Layers, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -20,7 +20,7 @@ export default function App() {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [apiOnline, setApiOnline] = useState(false);
-  const [activeSection, setActiveSection] = useState('summary'); // 'summary' | 'iocs' | 'mitre' | 'rules'
+  const [activeSection, setActiveSection] = useState('risk'); // 'risk' | 'summary' | 'iocs' | 'mitre' | 'rules'
 
   // Check API health and load default history on start
   useEffect(() => {
@@ -114,23 +114,22 @@ export default function App() {
             {/* Left Column: Input Panel */}
             <div className="dashboard-left">
               <ThreatInput onAnalyze={handleAnalyze} loading={loading} />
-              
-              {activeAnalysis && (
-                <RiskScoreGauge 
-                  score={activeAnalysis.risk_score} 
-                  level={activeAnalysis.risk_level} 
-                  factors={activeAnalysis.risk_factors} 
-                />
-              )}
             </div>
 
             {/* Right Column: Dynamic Analysis Panels */}
             <div className="dashboard-right">
               {activeAnalysis ? (
-                <div className="analysis-results">
+                <div className="analysis-results animate-fade-in">
                   
                   {/* Results Panel Switch Tabs */}
                   <div className="results-nav-tabs">
+                    <button 
+                      className={`res-tab-btn ${activeSection === 'risk' ? 'active' : ''}`}
+                      onClick={() => setActiveSection('risk')}
+                    >
+                      <ShieldCheck size={16} />
+                      <span>Risk Engine</span>
+                    </button>
                     <button 
                       className={`res-tab-btn ${activeSection === 'summary' ? 'active' : ''}`}
                       onClick={() => setActiveSection('summary')}
@@ -163,6 +162,15 @@ export default function App() {
 
                   {/* Tab Renderers */}
                   <div className="results-viewport">
+                    {activeSection === 'risk' && (
+                      <div className="animate-fade-in">
+                        <RiskScoreGauge 
+                          score={activeAnalysis.risk_score} 
+                          level={activeAnalysis.risk_level} 
+                          factors={activeAnalysis.risk_factors} 
+                        />
+                      </div>
+                    )}
                     {activeSection === 'summary' && (
                       <AIReportViewer report={activeAnalysis.ai_report} />
                     )}

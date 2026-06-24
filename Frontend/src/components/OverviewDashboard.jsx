@@ -8,6 +8,56 @@ import {
   CartesianGrid, Tooltip, BarChart, Bar, Cell, Legend 
 } from 'recharts';
 
+// Custom styled tooltip for the risk trend Area Chart
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="custom-chart-tooltip" style={{
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border-light)',
+        borderRadius: 'var(--radius-md)',
+        padding: '10px 14px',
+        boxShadow: 'var(--shadow-md)',
+        backdropFilter: 'blur(8px)'
+      }}>
+        <p className="label font-sans" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+          {data.name || label}
+        </p>
+        <p className="intro font-sans" style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#00f0ff' }}>
+          Risk Score: <strong style={{ fontSize: '0.9rem' }}>{payload[0].value}</strong>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom styled tooltip for the severity distribution Bar Chart
+const SeverityTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="custom-chart-tooltip" style={{
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border-light)',
+        borderRadius: 'var(--radius-md)',
+        padding: '10px 14px',
+        boxShadow: 'var(--shadow-md)',
+        backdropFilter: 'blur(8px)'
+      }}>
+        <p className="label font-sans" style={{ margin: 0, fontSize: '0.85rem', color: data.color, fontWeight: 600 }}>
+          {data.name} Severity
+        </p>
+        <p className="intro font-sans" style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+          Scans: <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{payload[0].value}</strong>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function OverviewDashboard({ history = [], onNavigate, onSelectThreat, apiOnline }) {
   
   // Compute Stats
@@ -151,7 +201,7 @@ export default function OverviewDashboard({ history = [], onNavigate, onSelectTh
           </div>
           <div className="chart-wrapper">
             {trendData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="99%" height={260}>
                 <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
@@ -162,12 +212,7 @@ export default function OverviewDashboard({ history = [], onNavigate, onSelectTh
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                   <XAxis dataKey="id" stroke="var(--text-muted)" fontSize={11} />
                   <YAxis domain={[0, 100]} stroke="var(--text-muted)" fontSize={11} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-medium)' }} 
-                    labelStyle={{ color: 'var(--text-primary)', fontWeight: 'bold' }}
-                    itemStyle={{ color: '#00f0ff' }}
-                    formatter={(value, name, props) => [`Score: ${value}`, props.payload.name]}
-                  />
+                  <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="score" stroke="#00f0ff" strokeWidth={2} fillOpacity={1} fill="url(#colorScore)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -188,15 +233,12 @@ export default function OverviewDashboard({ history = [], onNavigate, onSelectTh
           </div>
           <div className="chart-wrapper">
             {totalScans > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="99%" height={260}>
                 <BarChart data={severityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                   <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} />
                   <YAxis allowDecimals={false} stroke="var(--text-muted)" fontSize={11} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-medium)' }}
-                    itemStyle={{ color: 'var(--text-primary)' }}
-                  />
+                  <Tooltip content={<SeverityTooltip />} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                     {severityData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />

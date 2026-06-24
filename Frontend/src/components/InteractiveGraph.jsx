@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Network, Server, Globe, ShieldAlert, Shield, Hash, 
   Info, Award, User, RefreshCw, Layers 
 } from 'lucide-react';
+import * as d3 from 'd3';
 
 export default function InteractiveGraph({ analysisData }) {
   const [nodes, setNodes] = useState([]);
@@ -12,8 +13,9 @@ export default function InteractiveGraph({ analysisData }) {
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'intel' | 'network' | 'file'
   const [resetTrigger, setResetTrigger] = useState(0);
   const [draggedNodeId, setDraggedNodeId] = useState(null);
+  const simulationRef = useRef(null);
 
-  // Initialize and position nodes
+  // Initialize and run D3 force simulation
   useEffect(() => {
     if (!analysisData) return;
 
@@ -66,14 +68,14 @@ export default function InteractiveGraph({ analysisData }) {
       });
     });
 
-    // Arrange satellites in a circle around center
+    // Arrange satellites in a circle around center as starting coordinates for simulation
     const totalSatellites = satellites.length;
-    const distance = 160;
+    const initialDistance = 150;
 
     satellites.forEach((sat, index) => {
       const theta = (index / totalSatellites) * 2 * Math.PI;
-      sat.x = centerNode.x + distance * Math.cos(theta);
-      sat.y = centerNode.y + distance * Math.sin(theta);
+      sat.x = centerNode.x + initialDistance * Math.cos(theta);
+      sat.y = centerNode.y + initialDistance * Math.sin(theta);
       
       newNodes.push(sat);
 
@@ -94,16 +96,69 @@ export default function InteractiveGraph({ analysisData }) {
       }
     });
 
-    setNodes(newNodes);
-    setLinks(newLinks);
+    // Filter nodes based on activeFilter
+    const filteredNodes = newNodes.filter(node => {
+      if (node.id === 'center') return true;
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'intel') {
+        return ['actor', 'malware', 'cve', 'cve id', 'threat'].includes(node.type?.toLowerCase());
+      }
+      if (activeFilter === 'network') {
+        return ['ipv4', 'domain', 'url', 'email'].includes(node.type?.toLowerCase());
+      }
+      if (activeFilter === 'file') {
+        return ['md5', 'sha1', 'sha256'].includes(node.type?.toLowerCase());
+      }
+      return true;
+    });
+
+    const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+    const filteredLinks = newLinks.filter(link => 
+      filteredNodeIds.has(link.source) && filteredNodeIds.has(link.target)
+    );
+
+    // Setup D3 Force Simulation
+    const simulation = d3.forceSimulation(filteredNodes)
+      .force('link', d3.forceLink(filteredLinks).id(d => d.id).distance(130).strength(1))
+      .force('charge', d3.forceManyBody().strength(-350))
+      .force('center', d3.forceCenter(350, 200))
+      .force('collision', d3.forceCollide().radius(d => d.radius + 15))
+      .alphaDecay(0.04); // Moderate decay for smooth stabilization
+
+    simulationRef.current = simulation;
+
+    // Update state on each tick
+    simulation.on('tick', () => {
+      setNodes([...filteredNodes]);
+      setLinks([...filteredLinks]);
+    });
+
     setSelectedNode(null);
-  }, [analysisData, resetTrigger]);
+
+    return () => {
+      simulation.stop();
+    };
+  }, [analysisData, resetTrigger, activeFilter]);
 
   // Pointer dragging handlers
   const handlePointerDown = (e, nodeId) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDraggedNodeId(nodeId);
+
+    // Heat up simulation
+    if (simulationRef.current) {
+      simulationRef.current.alphaTarget(0.3).restart();
+    }
+
+    // Fix node position
+    setNodes(prev => prev.map(node => {
+      if (node.id === nodeId) {
+        node.fx = node.x;
+        node.fy = node.y;
+      }
+      return node;
+    }));
   };
 
   const handlePointerMove = (e) => {
@@ -119,13 +174,29 @@ export default function InteractiveGraph({ analysisData }) {
     const clampedX = Math.min(680, Math.max(20, x));
     const clampedY = Math.min(380, Math.max(20, y));
 
-    setNodes(prev => prev.map(node => 
-      node.id === draggedNodeId ? { ...node, x: clampedX, y: clampedY } : node
-    ));
+    setNodes(prev => prev.map(node => {
+      if (node.id === draggedNodeId) {
+        node.fx = clampedX;
+        node.fy = clampedY;
+        node.x = clampedX;
+        node.y = clampedY;
+      }
+      return node;
+    }));
   };
 
   const handlePointerUp = (e) => {
     if (draggedNodeId) {
+      if (simulationRef.current) {
+        simulationRef.current.alphaTarget(0);
+      }
+      setNodes(prev => prev.map(node => {
+        if (node.id === draggedNodeId) {
+          node.fx = null;
+          node.fy = null;
+        }
+        return node;
+      }));
       setDraggedNodeId(null);
     }
   };
@@ -133,27 +204,6 @@ export default function InteractiveGraph({ analysisData }) {
   const handleResetLayout = () => {
     setResetTrigger(prev => prev + 1);
   };
-
-  // Filter nodes and links dynamically
-  const filteredNodes = nodes.filter(node => {
-    if (node.id === 'center') return true;
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'intel') {
-      return ['actor', 'malware', 'cve', 'cve id', 'threat'].includes(node.type?.toLowerCase());
-    }
-    if (activeFilter === 'network') {
-      return ['ipv4', 'domain', 'url', 'email'].includes(node.type?.toLowerCase());
-    }
-    if (activeFilter === 'file') {
-      return ['md5', 'sha1', 'sha256'].includes(node.type?.toLowerCase());
-    }
-    return true;
-  });
-
-  const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
-  const filteredLinks = links.filter(link => 
-    filteredNodeIds.has(link.source) && filteredNodeIds.has(link.target)
-  );
 
   const getNodeIcon = (type) => {
     switch (type?.toLowerCase()) {
@@ -301,12 +351,14 @@ export default function InteractiveGraph({ analysisData }) {
             </defs>
 
             {/* Draw Links */}
-            {filteredLinks.map((link) => {
-              const srcNode = filteredNodes.find(n => n.id === link.source);
-              const tgtNode = filteredNodes.find(n => n.id === link.target);
+            {links.map((link) => {
+              const srcNode = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
+              const tgtNode = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
               if (!srcNode || !tgtNode) return null;
 
-              const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
+              const srcId = srcNode.id;
+              const tgtId = tgtNode.id;
+              const isHighlighted = hoveredNode && (hoveredNode.id === srcId || hoveredNode.id === tgtId);
 
               return (
                 <g key={link.id}>
@@ -337,7 +389,7 @@ export default function InteractiveGraph({ analysisData }) {
             })}
 
             {/* Draw Nodes */}
-            {filteredNodes.map((node) => {
+            {nodes.map((node) => {
               const Icon = getNodeIcon(node.type);
               const isCenter = node.id === 'center';
               const isHovered = hoveredNode?.id === node.id;
