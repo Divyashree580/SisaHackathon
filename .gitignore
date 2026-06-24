@@ -1,0 +1,13 @@
+# Frontend and Backend Environment Files (Monorepo)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env.*
+
+# Explicit package level environment files
+Backend/.env
+Backend/.env.*
+Frontend/.env
+Frontend/.env.*

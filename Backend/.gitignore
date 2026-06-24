@@ -1,0 +1,14 @@
+# Python ignore
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases
+*.db
+*.sqlite3
+
+# Local configuration
+.env
+.venv/
+venv/
+ENV/

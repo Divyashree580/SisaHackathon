@@ -1,0 +1,66 @@
+[
+  {
+    "tactic": "Reconnaissance",
+    "techniques": [
+      { "id": "T1595", "name": "Active Scanning" },
+      { "id": "T1589", "name": "Gather Victim Identity Information" },
+      { "id": "T1592", "name": "Gather Victim Host Information" }
+    ]
+  },
+  {
+    "tactic": "Initial Access",
+    "techniques": [
+      { "id": "T1190", "name": "Exploit Public-Facing Application" },
+      { "id": "T1566", "name": "Phishing" },
+      { "id": "T1566.001", "name": "Spearphishing Attachment" },
+      { "id": "T1195.002", "name": "Supply Chain Compromise: Compromise Software Dependencies" }
+    ]
+  },
+  {
+    "tactic": "Execution",
+    "techniques": [
+      { "id": "T1204", "name": "User Execution" },
+      { "id": "T1204.002", "name": "User Execution: Malicious File" },
+      { "id": "T1059", "name": "Command and Scripting Interpreter" },
+      { "id": "T1203", "name": "Exploitation for Client Execution" }
+    ]
+  },
+  {
+    "tactic": "Defense Evasion",
+    "techniques": [
+      { "id": "T1574.002", "name": "Hijack Execution Flow: DLL Side-Loading" },
+      { "id": "T1027", "name": "Obfuscated Files or Information" },
+      { "id": "T1562", "name": "Impair Defenses" }
+    ]
+  },
+  {
+    "tactic": "Credential Access",
+    "techniques": [
+      { "id": "T1003", "name": "OS Credential Dumping" },
+      { "id": "T1110", "name": "Brute Force" }
+    ]
+  },
+  {
+    "tactic": "Command and Control",
+    "techniques": [
+      { "id": "T1071", "name": "Application Layer Protocol" },
+      { "id": "T1102", "name": "Web Service" },
+      { "id": "T1573", "name": "Encrypted Channel" }
+    ]
+  },
+  {
+    "tactic": "Exfiltration",
+    "techniques": [
+      { "id": "T1041", "name": "Exfiltration Over C2 Channel" },
+      { "id": "T1020", "name": "Automated Exfiltration" }
+    ]
+  },
+  {
+    "tactic": "Impact",
+    "techniques": [
+      { "id": "T1486", "name": "Data Encrypted for Impact" },
+      { "id": "T1485", "name": "Data Destruction" },
+      { "id": "T1490", "name": "Inhibit System Recovery" }
+    ]
+  }
+]
