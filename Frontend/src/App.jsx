@@ -8,11 +8,14 @@ import AIReportViewer from './components/AIReportViewer';
 import DetectionRules from './components/DetectionRules';
 import InteractiveGraph from './components/InteractiveGraph';
 import HistoryList from './components/HistoryList';
+import OverviewDashboard from './components/OverviewDashboard';
+import SystemHealth from './components/SystemHealth';
+import RuleEngineHub from './components/RuleEngineHub';
 import { api, loadHistoryFromStorage } from './services/api';
 import { Activity, ShieldAlert, BookOpen, Layers } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('overview');
   const [activeAnalysis, setActiveAnalysis] = useState(null);
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -63,8 +66,8 @@ export default function App() {
       setActiveAnalysis(result);
       // Reload history list
       setHistoryList(loadHistoryFromStorage());
-      // Switch view to dashboard
-      setActiveTab('dashboard');
+      // Switch view to analyzer
+      setActiveTab('analyzer');
     } catch (e) {
       console.error("Analysis pipeline execution failed", e);
     } finally {
@@ -74,7 +77,7 @@ export default function App() {
 
   const handleSelectHistory = (item) => {
     setActiveAnalysis(item);
-    setActiveTab('dashboard');
+    setActiveTab('analyzer');
   };
 
   const handleClearHistory = () => {
@@ -94,7 +97,18 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="main-content">
-        {activeTab === 'dashboard' && (
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <OverviewDashboard 
+            history={historyList}
+            onNavigate={setActiveTab}
+            onSelectThreat={setActiveAnalysis}
+            apiOnline={apiOnline}
+          />
+        )}
+
+        {/* Threat Analyzer Tab */}
+        {activeTab === 'analyzer' && (
           <div className="dashboard-grid animate-fade-in">
             
             {/* Left Column: Input Panel */}
@@ -183,6 +197,16 @@ export default function App() {
           </div>
         )}
 
+        {/* Rule Engine Workstation Tab */}
+        {activeTab === 'rules' && (
+          <RuleEngineHub 
+            history={historyList}
+            activeAnalysis={activeAnalysis}
+            onSelectThreat={setActiveAnalysis}
+            onUpdateHistory={setHistoryList}
+          />
+        )}
+
         {/* History Audit Logs Tab */}
         {activeTab === 'history' && (
           <div className="history-tab-view animate-fade-in">
@@ -192,6 +216,11 @@ export default function App() {
               onClear={handleClearHistory} 
             />
           </div>
+        )}
+
+        {/* System Health Tab */}
+        {activeTab === 'health' && (
+          <SystemHealth />
         )}
       </main>
     </div>

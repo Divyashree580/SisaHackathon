@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Upload, FileText, Play, Check, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Upload, FileText, Play, Check, AlertTriangle, Activity } from 'lucide-react';
 import { SEED_SCENARIOS } from '../services/api';
 
 export default function ThreatInput({ onAnalyze, loading }) {
@@ -12,6 +12,31 @@ export default function ThreatInput({ onAnalyze, loading }) {
     generate_rules: true,
     risk_scoring: true
   });
+
+  const [activeStep, setActiveStep] = useState(0);
+
+  const PIPELINE_STEPS = [
+    'Ingesting threat intelligence data...',
+    'Extracting indicator regex signatures...',
+    'Querying NVD CVE vulnerability DB...',
+    'Mapping techniques to MITRE ATT&CK...',
+    'Orchestrating AI risk assessment report...',
+    'Generating Sigma, YARA & SIEM rules...',
+    'Persisting intelligence logs to database...'
+  ];
+
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      setActiveStep(0);
+      timer = setInterval(() => {
+        setActiveStep(prev => (prev < PIPELINE_STEPS.length - 1 ? prev + 1 : prev));
+      }, 1000);
+    } else {
+      setActiveStep(0);
+    }
+    return () => clearInterval(timer);
+  }, [loading]);
 
   const handlePresetChange = (e) => {
     const val = e.target.value;
@@ -65,6 +90,33 @@ export default function ThreatInput({ onAnalyze, loading }) {
   const handleOptionToggle = (key) => {
     setOptions(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  if (loading) {
+    return (
+      <div className="threat-input-card card loading-pipeline-card animate-fade-in">
+        <div className="card-header" style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <Activity size={36} className="text-cyan animate-pulse" style={{ margin: '0 auto 12px' }} />
+          <h2>AI Security Engine Active</h2>
+          <span className="card-subtitle">Executing multi-stage threat intelligence pipeline</span>
+        </div>
+        
+        <div className="pipeline-stepper">
+          {PIPELINE_STEPS.map((step, idx) => {
+            const isCompleted = idx < activeStep;
+            const isActive = idx === activeStep;
+            return (
+              <div key={idx} className={`stepper-node ${isCompleted ? 'completed' : isActive ? 'active' : 'pending'}`}>
+                <div className="stepper-bullet">
+                  {isCompleted ? <Check size={10} style={{ color: 'var(--bg-primary)' }} /> : isActive ? <div className="spinner-mini" /> : null}
+                </div>
+                <span className="stepper-text font-sans">{step}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="threat-input-card card">

@@ -1,31 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { Network, Server, Globe, ShieldAlert, Shield, Hash, Info, Award, User } from 'lucide-react';
+import { 
+  Network, Server, Globe, ShieldAlert, Shield, Hash, 
+  Info, Award, User, RefreshCw, Layers 
+} from 'lucide-react';
 
 export default function InteractiveGraph({ analysisData }) {
   const [nodes, setNodes] = useState([]);
   const [links, setLinks] = useState([]);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'intel' | 'network' | 'file'
+  const [resetTrigger, setResetTrigger] = useState(0);
+  const [draggedNodeId, setDraggedNodeId] = useState(null);
 
+  // Initialize and position nodes
   useEffect(() => {
     if (!analysisData) return;
 
     const newNodes = [];
     const newLinks = [];
 
-    // 1. Center node (Threat Incident)
+    // 1. Center Node (Threat Incident)
     const centerNode = {
       id: 'center',
       label: analysisData.risk_level + ' Incident',
       type: 'threat',
       x: 350,
       y: 200,
-      radius: 28,
+      radius: 30,
       color: analysisData.risk_level === 'Critical' ? '#ff3e3e' : analysisData.risk_level === 'High' ? '#ffaa00' : '#00f0ff'
     };
     newNodes.push(centerNode);
 
-    let angle = 0;
     const actorName = analysisData.enrichment?.threat_actors?.[0];
     const malwareName = analysisData.enrichment?.malware_families?.[0];
     const cveName = analysisData.enrichment?.cve_id && analysisData.enrichment.cve_id !== 'N/A' ? analysisData.enrichment.cve_id : null;
@@ -91,78 +97,252 @@ export default function InteractiveGraph({ analysisData }) {
     setNodes(newNodes);
     setLinks(newLinks);
     setSelectedNode(null);
-  }, [analysisData]);
+  }, [analysisData, resetTrigger]);
+
+  // Pointer dragging handlers
+  const handlePointerDown = (e, nodeId) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggedNodeId(nodeId);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!draggedNodeId) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    
+    // Convert client coordinates to SVG viewBox (700 x 400)
+    const x = ((e.clientX - rect.left) / rect.width) * 700;
+    const y = ((e.clientY - rect.top) / rect.height) * 400;
+
+    // Clamp values so nodes don't get dragged off-screen
+    const clampedX = Math.min(680, Math.max(20, x));
+    const clampedY = Math.min(380, Math.max(20, y));
+
+    setNodes(prev => prev.map(node => 
+      node.id === draggedNodeId ? { ...node, x: clampedX, y: clampedY } : node
+    ));
+  };
+
+  const handlePointerUp = (e) => {
+    if (draggedNodeId) {
+      setDraggedNodeId(null);
+    }
+  };
+
+  const handleResetLayout = () => {
+    setResetTrigger(prev => prev + 1);
+  };
+
+  // Filter nodes and links dynamically
+  const filteredNodes = nodes.filter(node => {
+    if (node.id === 'center') return true;
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'intel') {
+      return ['actor', 'malware', 'cve', 'cve id', 'threat'].includes(node.type?.toLowerCase());
+    }
+    if (activeFilter === 'network') {
+      return ['ipv4', 'domain', 'url', 'email'].includes(node.type?.toLowerCase());
+    }
+    if (activeFilter === 'file') {
+      return ['md5', 'sha1', 'sha256'].includes(node.type?.toLowerCase());
+    }
+    return true;
+  });
+
+  const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+  const filteredLinks = links.filter(link => 
+    filteredNodeIds.has(link.source) && filteredNodeIds.has(link.target)
+  );
 
   const getNodeIcon = (type) => {
     switch (type?.toLowerCase()) {
-      case 'threat':
-        return ShieldAlert;
-      case 'actor':
-        return User;
-      case 'malware':
-        return Award;
+      case 'threat': return ShieldAlert;
+      case 'actor': return User;
+      case 'malware': return Award;
       case 'cve':
-      case 'cve id':
-        return Shield;
-      case 'ipv4':
-        return Server;
+      case 'cve id': return Shield;
+      case 'ipv4': return Server;
       case 'domain':
-      case 'url':
-        return Globe;
-      default:
-        return Info;
+      case 'url': return Globe;
+      default: return Info;
     }
+  };
+
+  const getNodeFill = (node) => {
+    if (node.id === 'center') return 'url(#grad-threat)';
+    if (node.type === 'actor') return 'url(#grad-actor)';
+    if (node.type === 'malware') return 'url(#grad-malware)';
+    if (node.type === 'cve') return 'url(#grad-cve)';
+    
+    // IOC Node Fills based on color mapping
+    if (node.color === '#ff3e3e') return 'url(#grad-ioc-mal)';
+    if (node.color === '#ffaa00') return 'url(#grad-ioc-susp)';
+    if (node.color === '#00ff9f') return 'url(#grad-ioc-low)';
+    return 'url(#grad-ioc-default)';
   };
 
   if (!analysisData) {
     return (
       <div className="graph-card card empty">
-        <p>Run threat analysis to view the threat interaction graph.</p>
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Network size={48} className="text-muted animate-pulse" style={{ marginBottom: '16px' }} />
+          <h3>System Awaiting Ingestion</h3>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>Run a threat analysis scan to view the interactive relationship topology map.</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="graph-card card">
-      <div className="card-header">
-        <h2>Adversarial Relationship Graph</h2>
-        <span className="card-subtitle">IOC network paths and actor attribution relationship map</span>
+      {/* Top Header Control Bar */}
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h2>Adversarial Relationship Graph</h2>
+          <span className="card-subtitle">IOC network paths and actor attribution relationship map</span>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* Snap Reset Button */}
+          <button 
+            onClick={handleResetLayout} 
+            className="btn btn-secondary btn-icon-only btn-small"
+            title="Stabilize & Reset Node Positions"
+            style={{ padding: '8px' }}
+          >
+            <RefreshCw size={14} />
+          </button>
+
+          {/* Graph Filters Row */}
+          <div className="graph-filters-row">
+            <button 
+              className={`filter-btn ${activeFilter === 'all' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('all'); setSelectedNode(null); }}
+            >
+              All Nodes
+            </button>
+            <button 
+              className={`filter-btn ${activeFilter === 'intel' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('intel'); setSelectedNode(null); }}
+            >
+              Attribution
+            </button>
+            <button 
+              className={`filter-btn ${activeFilter === 'network' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('network'); setSelectedNode(null); }}
+            >
+              Network
+            </button>
+            <button 
+              className={`filter-btn ${activeFilter === 'file' ? 'active' : ''}`}
+              onClick={() => { setActiveFilter('file'); setSelectedNode(null); }}
+            >
+              Signatures
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="graph-viewport-container">
         {/* SVG Graph Viewport */}
         <div className="graph-svg-wrapper">
-          <svg className="graph-svg" viewBox="0 0 700 400" width="100%" height="100%">
+          <span className="drag-hint font-mono text-muted" style={{ position: 'absolute', top: '10px', left: '10px', fontSize: '0.7rem' }}>
+            * Click and drag nodes to custom positions
+          </span>
+          <svg 
+            className="graph-svg" 
+            viewBox="0 0 700 400" 
+            width="100%" 
+            height="100%"
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+          >
+            {/* Gradient Definitions */}
+            <defs>
+              <linearGradient id="grad-threat" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ff5e62" />
+                <stop offset="100%" stopColor="#ff3e3e" />
+              </linearGradient>
+              <linearGradient id="grad-actor" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f000ff" />
+                <stop offset="100%" stopColor="#7b00ff" />
+              </linearGradient>
+              <linearGradient id="grad-malware" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffaa00" />
+                <stop offset="100%" stopColor="#ff5500" />
+              </linearGradient>
+              <linearGradient id="grad-cve" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ff3e3e" />
+                <stop offset="100%" stopColor="#ffaa00" />
+              </linearGradient>
+              <linearGradient id="grad-ioc-mal" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ff3e3e" />
+                <stop offset="100%" stopColor="#a30000" />
+              </linearGradient>
+              <linearGradient id="grad-ioc-susp" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffaa00" />
+                <stop offset="100%" stopColor="#b37400" />
+              </linearGradient>
+              <linearGradient id="grad-ioc-low" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00ff9f" />
+                <stop offset="100%" stopColor="#00a365" />
+              </linearGradient>
+              <linearGradient id="grad-ioc-default" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00f0ff" />
+                <stop offset="100%" stopColor="#007799" />
+              </linearGradient>
+              
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
             {/* Draw Links */}
-            {links.map((link) => {
-              const srcNode = nodes.find(n => n.id === link.source);
-              const tgtNode = nodes.find(n => n.id === link.target);
+            {filteredLinks.map((link) => {
+              const srcNode = filteredNodes.find(n => n.id === link.source);
+              const tgtNode = filteredNodes.find(n => n.id === link.target);
               if (!srcNode || !tgtNode) return null;
 
               const isHighlighted = hoveredNode && (hoveredNode.id === link.source || hoveredNode.id === link.target);
 
               return (
-                <line
-                  key={link.id}
-                  x1={srcNode.x}
-                  y1={srcNode.y}
-                  x2={tgtNode.x}
-                  y2={tgtNode.y}
-                  stroke={link.color}
-                  strokeWidth={isHighlighted ? 3 : 1.5}
-                  strokeOpacity={isHighlighted ? 0.9 : 0.4}
-                  strokeDasharray={link.dashed ? "5,5" : "none"}
-                  className={isHighlighted ? "link-pulse" : ""}
-                />
+                <g key={link.id}>
+                  {/* Base static background line */}
+                  <line
+                    x1={srcNode.x}
+                    y1={srcNode.y}
+                    x2={tgtNode.x}
+                    y2={tgtNode.y}
+                    stroke={link.color}
+                    strokeWidth={isHighlighted ? 4 : 1.5}
+                    strokeOpacity={isHighlighted ? 0.3 : 0.15}
+                  />
+                  {/* Animated dotted flow overlay line */}
+                  <line
+                    x1={srcNode.x}
+                    y1={srcNode.y}
+                    x2={tgtNode.x}
+                    y2={tgtNode.y}
+                    stroke={link.color}
+                    strokeWidth={isHighlighted ? 2.5 : 1.2}
+                    strokeOpacity={isHighlighted ? 0.95 : 0.6}
+                    strokeDasharray={link.dashed ? "5,5" : "6,6"}
+                    className="link-pulse"
+                  />
+                </g>
               );
             })}
 
             {/* Draw Nodes */}
-            {nodes.map((node) => {
+            {filteredNodes.map((node) => {
               const Icon = getNodeIcon(node.type);
               const isCenter = node.id === 'center';
               const isHovered = hoveredNode?.id === node.id;
               const isSelected = selectedNode?.id === node.id;
+              const isDragging = draggedNodeId === node.id;
 
               return (
                 <g 
@@ -171,25 +351,35 @@ export default function InteractiveGraph({ analysisData }) {
                   transform={`translate(${node.x}, ${node.y})`}
                   onMouseEnter={() => setHoveredNode(node)}
                   onMouseLeave={() => setHoveredNode(null)}
+                  onPointerDown={(e) => handlePointerDown(e, node.id)}
                   onClick={() => setSelectedNode(node)}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
                 >
-                  {/* Glowing Ring */}
+                  {/* Glowing ambient ring */}
                   <circle
-                    r={node.radius + (isHovered ? 8 : 4)}
+                    r={node.radius + (isHovered || isSelected ? 8 : 4)}
                     fill="none"
                     stroke={node.color}
                     strokeWidth={2}
-                    strokeOpacity={isHovered || isSelected ? 0.8 : 0.2}
-                    className={isHovered || isCenter ? "pulse-ring" : ""}
+                    strokeOpacity={isHovered || isSelected ? 0.8 : 0.25}
+                    filter="url(#glow)"
                   />
 
-                  {/* Base Circle */}
+                  {/* Secondary thin ring for design texture */}
+                  <circle
+                    r={node.radius + 3}
+                    fill="none"
+                    stroke={node.color}
+                    strokeWidth={1}
+                    strokeOpacity={0.4}
+                  />
+
+                  {/* Main Circle (fill gradient) */}
                   <circle
                     r={node.radius}
-                    fill="#151722"
+                    fill={getNodeFill(node)}
                     stroke={node.color}
-                    strokeWidth={isHovered || isSelected ? 3 : 2}
+                    strokeWidth={isHovered || isSelected ? 2.5 : 1.5}
                   />
 
                   {/* Icon */}
@@ -200,15 +390,16 @@ export default function InteractiveGraph({ analysisData }) {
                     height={20} 
                     style={{ pointerEvents: 'none' }}
                   >
-                    <Icon size={20} style={{ color: node.color }} />
+                    <Icon size={20} style={{ color: '#ffffff' }} />
                   </foreignObject>
 
                   {/* Text Label */}
                   <text
                     y={node.radius + 15}
                     textAnchor="middle"
-                    fill={isHovered ? '#fff' : '#8a99ad'}
+                    fill={isHovered || isSelected ? '#ffffff' : '#8a99ad'}
                     fontSize={11}
+                    fontWeight={isHovered || isSelected ? '600' : '400'}
                     className="node-label font-mono"
                   >
                     {node.label.length > 20 ? `${node.label.slice(0, 18)}...` : node.label}
@@ -235,7 +426,7 @@ export default function InteractiveGraph({ analysisData }) {
                 {selectedNode.details && (
                   <p><strong>Attribution Context:</strong> {selectedNode.details}</p>
                 )}
-                <p><strong>Position:</strong> X: {selectedNode.x.toFixed(0)}, Y: {selectedNode.y.toFixed(0)}</p>
+                <p><strong>Coordinates:</strong> X: {selectedNode.x.toFixed(0)}, Y: {selectedNode.y.toFixed(0)}</p>
               </div>
             </div>
           ) : hoveredNode ? (
@@ -250,8 +441,8 @@ export default function InteractiveGraph({ analysisData }) {
             </div>
           ) : (
             <div className="graph-inspector-empty">
-              <Network size={32} className="network-icon" />
-              <p>Hover or click on any node in the topology map to inspect metadata links and network relations.</p>
+              <Network size={32} className="network-icon text-cyan" />
+              <p>Hover or click on any node in the topology map to inspect metadata links and network relations. Drag nodes to customize placement.</p>
             </div>
           )}
         </div>
