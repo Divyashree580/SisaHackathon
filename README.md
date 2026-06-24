@@ -199,6 +199,17 @@ SisaHackathon/
     ```
 4. Open your browser and direct it to `http://localhost:5173`.
 
+### 3. Running Backend Tests
+To execute the comprehensive FastAPI test suite:
+1. Navigate to the backend directory:
+    ```bash
+    cd Backend
+    ```
+2. Activate your virtual environment and run pytest:
+    ```bash
+    python -m pytest tests/
+    ```
+
 ---
 
 ## 📝 API Endpoints Reference
