@@ -11,3 +11,9 @@ Backend/.env
 Backend/.env.*
 Frontend/.env
 Frontend/.env.*
+
+# Python Virtual Environments
+.venv/
+venv/
+Backend/.venv/
+Frontend/.venv/
