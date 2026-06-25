@@ -7,9 +7,10 @@ SISA Sentinel is a premium, real-time **AI-Powered Threat Intelligence and Adver
 ## 🏗️ Architecture & Pipeline Flow
 
 The platform is designed with a high-performance **modular decoupled architecture**:
-*   **Frontend**: A modern React (Vite) application utilizing a customized design system built with custom CSS, glassmorphism aesthetics, responsive layouts, micro-animations, and interactive D3.js force-directed topology maps.
+*   **Frontend**: A modern React (Vite) application utilizing a customized design system built with custom CSS, glassmorphism aesthetics, responsive layouts, micro-animations, and interactive D3.js force-directed topology maps plus Cytoscape.js IOC relationship graphs.
 *   **Backend**: An asynchronous Python FastAPI server serving RESTful APIs, integrating MongoDB for data persistence, memory caching for identical inputs, and NVD + Groq LLM orchestration.
 *   **Hybrid Engine**: Built with a **High-Fidelity Client-Side Fallback**. If the backend FastAPI server or database is offline, the React frontend seamlessly runs a local browser-based parsing and analysis engine using matching heuristics, local regex extraction, and deterministic rule templates.
+*   **Global State Synchronization**: A single `activeAnalysis` state object is propagated from `App.jsx` into every tab/component. All pages — including the bonus feature tabs — automatically re-render and re-fetch results using the latest analyzed threat input.
 
 ### Data Ingestion & Analysis Pipeline (Mermaid)
 
@@ -36,12 +37,37 @@ graph TD
     GG --> K
     
     %% Rendering
-    K --> L[React App State Manager]
+    K --> L[React Global State — App.jsx]
     L --> M[Overview Dashboard]
-    L --> N[Adversarial Relationship Graph D3.js]
-    L --> O[MITRE ATT&CK Matrix Matrix Mapping]
+    L --> N[Adversarial Relationship Graph — D3.js]
+    L --> O[MITRE ATT&CK Matrix Mapping]
     L --> P[Rule Engine Workstation]
     L --> Q[System Health & Observability Hub]
+    L --> R[IOC Relationship Graph — Cytoscape.js]
+    L --> S[AI Attack Path Prediction]
+    L --> T[SIEM Query Generation Hub]
+```
+
+### Backend Module Map
+
+```mermaid
+graph LR
+    MAIN[main.py — FastAPI App] --> ANALYZE[/api/analyze-threat]
+    MAIN --> HEALTH[/health]
+    MAIN --> HIST[/api/analyses]
+    MAIN --> ATCK[attack_path.py — /api/attack-path]
+    MAIN --> IOCG[ioc_graph.py — /api/ioc/graph]
+    MAIN --> SIEM[siem.py — /api/siem/queries]
+    MAIN --> YARA[yara.py — /api/yara/rule]
+    MAIN --> FEED[threat_feed.py — /api/threat-feed]
+
+    ANALYZE --> EXT[services/extractor.py]
+    ANALYZE --> ENR[services/enrichment.py]
+    ANALYZE --> RISK[services/risk.py]
+    ANALYZE --> AI[services/ai.py — Groq LLM]
+    ANALYZE --> RULES[services/rules.py]
+    ANALYZE --> ING[services/ingestion.py]
+    ANALYZE --> CACHE[cache.py — MongoDB]
 ```
 
 ---
@@ -77,6 +103,7 @@ $$\text{Risk Score} = \min(100, \text{CVSS Factor} + \text{Exploit PoC Available
     *   `High` (61–80)
     *   `Medium` (31–60)
     *   `Low` (0–30)
+*   Displayed via an animated **SVG radial gauge** with tick marks and a colour-coded level banner, alongside a weighted contributing-factors grid.
 
 ### 5. AI-Powered Threat Briefs (`F4` & `F6`)
 *   Communicates with the **Groq API** running `llama-3.3-70b-versatile` to produce dynamic incident summaries, structured attack scenario timelines, and business risk assessments.
@@ -97,45 +124,114 @@ $$\text{Risk Score} = \min(100, \text{CVSS Factor} + \text{Exploit PoC Available
 
 ---
 
+## 🚀 Bonus / Extra Features
+
+### B1. AI Attack Path Prediction (`/attack-path`)
+*   A dedicated **Attack Path Prediction** tab generates a full cyber kill-chain timeline from threat input.
+*   **Backend** (`attack_path.py`): Sends threat text to `llama-3.3-70b-versatile` via Groq with a structured prompt requesting a kill-chain JSON (title, summary, 5–8 steps with MITRE technique IDs). Falls back to a curated static kill-chain when the Groq key is absent.
+*   **Frontend** (`AttackPath.jsx`): Renders each step as a color-coded animated timeline card showing step number, kill-chain phase name (with emoji icon), MITRE technique badge, and phase description.
+*   **Global sync**: When a new analysis is submitted, `activeAnalysis.raw_input` is automatically passed and the attack path re-generates for that threat.
+*   **Custom input mode**: Analysts can toggle a custom textarea to generate an attack path for any arbitrary threat description without running the full pipeline.
+
+### B2. IOC Relationship Graph — Cytoscape.js (`/ioc-graph`)
+*   A second interactive graph (distinct from the D3.js force graph) powered by **Cytoscape.js** visualises IOC-to-entity relationships.
+*   **Backend** (`ioc_graph.py`): Exposes `GET /api/ioc/graph` returning typed nodes (domain, IP, malware, CVE) and directional edges.
+*   **Frontend** (`IocGraph.jsx`): Reads `activeAnalysis` to generate live graph elements — extracting domains, IPs, hash values, CVEs, malware families, and threat actors. Falls back to a sample static graph when no analysis is loaded. Node shapes vary by type (diamond = domain, hexagon = IP, triangle = malware, round-rectangle = CVE). Hover highlights connected edges with a neon glow tooltip. Zoom in/out/fit/reset controls provided.
+*   Threat input context shown inline above the graph for traceability.
+
+### B3. SIEM Query Generation Hub (`/siem`)
+*   A standalone **SIEM Query Generation** tab auto-generates ready-to-paste detection queries for three major SIEM platforms based on extracted IOCs from the active analysis.
+*   **Backend** (`siem.py`): Exposes `GET /api/siem/queries?domain=...&ip=...` — parameterises domain and IP into Splunk SPL, Microsoft Sentinel KQL, and Elastic DSL query templates.
+*   **Frontend** (`SiemQueries.jsx`): Pulls domain/IP from `activeAnalysis.iocs`, calls the API, and renders each query in a syntax-highlighted card with a one-click **Copy to Clipboard** button. Falls back to client-side template generation when the API is offline.
+*   Displays the active threat input as a labelled context block at the top of the page.
+
+### B4. YARA Rule Generator (`/api/yara/rule`)
+*   Exposes a dedicated `GET /api/yara/rule` endpoint (`yara.py`) that composes YARA rules from hashes, domain strings, and malware names extracted from the current threat.
+*   Integrated into the **Rule Engine Workstation** (`RuleEngineHub.jsx`) alongside Sigma, Splunk, and KQL rules.
+
+### B5. Threat Feed Ticker (`/api/threat-feed`)
+*   `threat_feed.py` exposes `GET /api/threat-feed` returning a live list of recent threat entries seeded from MongoDB.
+*   Surfaced as a scrolling intel ticker on the **Overview Dashboard** (`OverviewDashboard.jsx`) to give analysts real-time situational awareness.
+
+### B6. Global Threat Input Synchronization
+*   A single `activeAnalysis` state object defined in `App.jsx` is passed as a prop to **every tab and component**.
+*   All bonus feature tabs (Attack Path, IOC Graph, SIEM Queries) automatically receive the latest analyzed threat text via `activeAnalysis.raw_input` and re-fetch / re-render their content accordingly.
+*   Each page displays an inline **"Threat Input"** context banner so analysts always know which intelligence input the current visualisation is derived from.
+
+### B7. Risk Score Gauge (`RiskScoreGauge`)
+*   A dedicated SVG-based animated circular gauge replaces plain numeric display for risk scores.
+*   32-tick dial with colour-coded active segments and a glow blur filter, animated via CSS transitions.
+*   Accompanied by a **Weighted Contributing Factors** grid that maps each factor (CVSS, Exploit PoC, Malware, Actor, IOC Reputation) to an explanatory description and a mini progress bar.
+
+### B8. System Health & Observability Hub
+*   A real-time **System Health** tab (`SystemHealth.jsx`) polls `GET /health` every 5 seconds to display:
+    *   MongoDB connection status & latency.
+    *   Groq LLM API reachability.
+    *   Total analyses processed, cache hit rate, and uptime.
+*   Status indicators use animated pulse badges (green = healthy, amber = degraded, red = offline).
+
+### B9. Audit History & Persistence
+*   Every completed analysis is persisted both to **MongoDB** (via `cache.py`) and to **browser localStorage** (via `api.js`).
+*   The **History** tab (`HistoryList.jsx`) lists all past runs with timestamps, risk badges, and IOC counts. Clicking any entry restores the full analysis state across all tabs.
+*   `GET /api/analyses` supports pagination, filtering by risk level / input type, and sorting.
+
+---
+
 ## 📂 Codebase Organization
 
 The project is structured as a monorepo containing distinct frontend and backend directories:
 
 ```text
 SisaHackathon/
-├── Backend/                 # FastAPI Python Backend
+├── Backend/                     # FastAPI Python Backend
 │   ├── app/
-│   │   ├── data/            # Local catalogs (mitre_catalog.json)
-│   │   ├── services/        # Pipeline modular stages
-│   │   │   ├── ai.py        # LLM integration (Groq API client)
-│   │   │   ├── enrichment.py# CVE & actor lookup
-│   │   │   ├── extractor.py # Regular expression matches
-│   │   │   ├── ingestion.py # Document parsers
-│   │   │   ├── risk.py      # Numerical score calculators
-│   │   │   └── rules.py     # SIEM/YARA rule builders
-│   │   ├── cache.py         # MongoDB caching layer
-│   │   ├── config.py        # Environment variables configuration
-│   │   ├── database.py      # Async MongoDB driver wrapper (motor)
-│   │   ├── schemas.py       # Pydantic contract validators
-│   │   └── main.py          # FastAPI application routes & lifespan
-│   ├── seed_data.py         # Seed script for initial database entries
-│   └── requirements.txt     # Python backend dependencies
+│   │   ├── data/                # Local catalogs (mitre_catalog.json)
+│   │   ├── services/            # Pipeline modular stages
+│   │   │   ├── ai.py            # LLM integration (Groq API client)
+│   │   │   ├── enrichment.py    # CVE & actor lookup
+│   │   │   ├── extractor.py     # Regular expression matches
+│   │   │   ├── ingestion.py     # Document parsers
+│   │   │   ├── risk.py          # Numerical score calculators
+│   │   │   └── rules.py         # SIEM/YARA rule builders
+│   │   ├── attack_path.py       # [BONUS] AI kill-chain generator (Groq)
+│   │   ├── ioc_graph.py         # [BONUS] IOC relationship graph endpoint
+│   │   ├── siem.py              # [BONUS] SIEM query generation endpoint
+│   │   ├── yara.py              # [BONUS] YARA rule composer endpoint
+│   │   ├── threat_feed.py       # [BONUS] Live threat feed ticker
+│   │   ├── cache.py             # MongoDB caching layer
+│   │   ├── config.py            # Environment variables configuration
+│   │   ├── database.py          # Async MongoDB driver wrapper (motor)
+│   │   ├── schemas.py           # Pydantic contract validators
+│   │   └── main.py              # FastAPI application routes & lifespan
+│   ├── tests/
+│   │   ├── test_extractor.py    # IOC extraction unit tests
+│   │   └── test_rules.py        # Rule generation unit tests
+│   ├── seed_data.py             # Seed script for initial database entries
+│   └── requirements.txt         # Python backend dependencies
 │
-└── Frontend/                # Vite React App
+└── Frontend/                    # Vite React App
     ├── src/
-    │   ├── components/      # UI components (dashboard widgets)
-    │   │   ├── AIReportViewer.jsx
-    │   │   ├── DetectionRules.jsx
-    │   │   ├── IOCTable.jsx
-    │   │   ├── InteractiveGraph.jsx  # D3 force graph layout
-    │   │   ├── MitreMatrix.jsx       # MITRE matrix visual grid
-    │   │   ├── OverviewDashboard.jsx # System KPIs and widgets
-    │   │   ├── RuleEngineHub.jsx     # Rule workstation
-    │   │   └── SystemHealth.jsx      # Telemetry diagnostics
+    │   ├── components/          # UI components (dashboard widgets)
+    │   │   ├── AIReportViewer.jsx        # AI threat brief renderer
+    │   │   ├── AttackPath.jsx            # [BONUS] AI kill-chain timeline
+    │   │   ├── DetectionRules.jsx        # SIEM/YARA rule display
+    │   │   ├── HistoryList.jsx           # [BONUS] Audit log / history tab
+    │   │   ├── IOCTable.jsx              # IOC registry table
+    │   │   ├── InteractiveGraph.jsx      # D3 force graph layout
+    │   │   ├── IocGraph.jsx              # [BONUS] Cytoscape.js IOC graph
+    │   │   ├── MitreMatrix.jsx           # MITRE matrix visual grid
+    │   │   ├── OverviewDashboard.jsx     # System KPIs and widgets
+    │   │   ├── RiskScoreGauge.jsx        # [BONUS] Animated SVG risk gauge
+    │   │   ├── RuleEngineHub.jsx         # Rule workstation
+    │   │   ├── Sidebar.jsx               # Navigation sidebar
+    │   │   ├── SiemQueries.jsx           # [BONUS] SIEM query hub
+    │   │   ├── SystemHealth.jsx          # [BONUS] Telemetry diagnostics
+    │   │   ├── ThreatInput.jsx           # Threat text / file input panel
+    │   │   └── YaraRule.jsx              # [BONUS] YARA rule viewer
     │   ├── services/
-    │   │   └── api.js       # API client & client-side fallback heuristics
-    │   ├── App.jsx          # Router & main state coordinator
-    │   ├── index.css        # Premium HSL CSS design system layout
+    │   │   └── api.js           # API client & client-side fallback heuristics
+    │   ├── App.jsx              # Router, global state coordinator & sync
+    │   ├── index.css            # Premium HSL CSS design system layout
     │   └── main.jsx
     └── vite.config.js
 ```
@@ -214,39 +310,50 @@ To execute the comprehensive FastAPI test suite:
 
 ## 📝 API Endpoints Reference
 
-### 1. System Health
-*   **Endpoint**: `GET /health`
-*   **Description**: Returns connection health for MongoDB/Groq and gateway uptime/latency metrics.
+### Core Pipeline
 
-### 2. Run Analysis Pipeline
-*   **Endpoint**: `POST /api/analyze-threat`
-*   **Content-Type**: `application/json`
-*   **Payload**:
-    ```json
-    {
-      "content": "Threat intelligence raw string...",
-      "input_type": "text",
-      "options": {
-        "mitre_mapping": true,
-        "generate_rules": true,
-        "risk_scoring": true
-      }
-    }
-    ```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Returns connection health for MongoDB/Groq and gateway uptime/latency metrics. |
+| `POST` | `/api/analyze-threat` | Run full AI threat analysis pipeline on raw text. |
+| `POST` | `/api/analyze-threat/upload` | Run full pipeline on an uploaded document file. |
+| `GET` | `/api/analyses` | Fetch paginated analysis history with filters. |
+| `GET` | `/api/analyses/{analysis_id}` | Fetch a single analysis record by ID. |
 
-### 3. File Document Upload
-*   **Endpoint**: `POST /api/analyze-threat/upload`
-*   **Content-Type**: `multipart/form-data`
-*   **Fields**:
-    *   `file`: The document binary.
-    *   `options`: Stringified options JSON object.
+#### `POST /api/analyze-threat` Payload
+```json
+{
+  "content": "Threat intelligence raw string...",
+  "input_type": "text",
+  "options": {
+    "mitre_mapping": true,
+    "generate_rules": true,
+    "risk_scoring": true
+  }
+}
+```
 
-### 4. Fetch Analysis Records History
-*   **Endpoint**: `GET /api/analyses`
-*   **Query Params**: `page` (int), `pageSize` (int), `risk_level` (str), `input_type` (str), `sort` (str).
+#### `GET /api/analyses` Query Params
+| Param | Type | Description |
+|-------|------|-------------|
+| `page` | int | Page number (default: 1) |
+| `pageSize` | int | Records per page (default: 20) |
+| `risk_level` | str | Filter: `Critical`, `High`, `Medium`, `Low` |
+| `input_type` | str | Filter: `text`, `file` |
+| `sort` | str | Sort field (e.g., `-timestamp`) |
 
-### 5. Fetch Single Run
-*   **Endpoint**: `GET /api/analyses/{analysis_id}`
+---
+
+### Bonus Feature Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/attack-path` | AI-generated kill-chain for a given `threat_text`. Uses Groq LLM; falls back to static data. |
+| `GET` | `/api/attack-path` | Return default static kill-chain (phishing campaign example). |
+| `GET` | `/api/ioc/graph` | Return IOC relationship graph (nodes + edges) for visualization. |
+| `GET` | `/api/siem/queries` | Generate Splunk SPL, Sentinel KQL, and Elastic DSL queries from `?domain=&ip=` params. |
+| `GET` | `/api/yara/rule` | Compose a YARA rule from extracted threat indicators. |
+| `GET` | `/api/threat-feed` | Return a live list of recent threat feed entries from MongoDB. |
 
 ---
 
@@ -262,11 +369,25 @@ The database populator (`seed_data.py`) contains five preconfigured high-fidelit
 
 ## 🔗 Key Source References
 
-*   **Backend Main Router**: [main.py](file:///c:/Users/divya/SisaHackathon/Backend/app/main.py)
+### Backend
+*   **Main Router & Lifespan**: [main.py](file:///c:/Users/divya/SisaHackathon/Backend/app/main.py)
 *   **Config Definitions**: [config.py](file:///c:/Users/divya/SisaHackathon/Backend/app/config.py)
 *   **Database Operations**: [database.py](file:///c:/Users/divya/SisaHackathon/Backend/app/database.py)
 *   **Extractor service**: [extractor.py](file:///c:/Users/divya/SisaHackathon/Backend/app/services/extractor.py)
 *   **AI generation core**: [ai.py](file:///c:/Users/divya/SisaHackathon/Backend/app/services/ai.py)
 *   **Risk assessment logic**: [risk.py](file:///c:/Users/divya/SisaHackathon/Backend/app/services/risk.py)
+*   **Attack Path module** *(bonus)*: [attack_path.py](file:///c:/Users/divya/SisaHackathon/Backend/app/attack_path.py)
+*   **IOC Graph module** *(bonus)*: [ioc_graph.py](file:///c:/Users/divya/SisaHackathon/Backend/app/ioc_graph.py)
+*   **SIEM Queries module** *(bonus)*: [siem.py](file:///c:/Users/divya/SisaHackathon/Backend/app/siem.py)
+*   **YARA Rule module** *(bonus)*: [yara.py](file:///c:/Users/divya/SisaHackathon/Backend/app/yara.py)
+*   **Threat Feed module** *(bonus)*: [threat_feed.py](file:///c:/Users/divya/SisaHackathon/Backend/app/threat_feed.py)
+
+### Frontend
 *   **Frontend Main coordinator**: [App.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/App.jsx)
 *   **API connector & Heuristics core**: [api.js](file:///c:/Users/divya/SisaHackathon/Frontend/src/services/api.js)
+*   **Attack Path tab** *(bonus)*: [AttackPath.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/components/AttackPath.jsx)
+*   **IOC Graph tab** *(bonus)*: [IocGraph.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/components/IocGraph.jsx)
+*   **SIEM Query Hub tab** *(bonus)*: [SiemQueries.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/components/SiemQueries.jsx)
+*   **Risk Score Gauge** *(bonus)*: [RiskScoreGauge.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/components/RiskScoreGauge.jsx)
+*   **System Health tab** *(bonus)*: [SystemHealth.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/components/SystemHealth.jsx)
+*   **History List tab** *(bonus)*: [HistoryList.jsx](file:///c:/Users/divya/SisaHackathon/Frontend/src/components/HistoryList.jsx)
