@@ -3,6 +3,8 @@ import { Crosshair, ChevronRight, Zap, Send, RotateCw } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
 
+const DEFAULT_THREAT_TEXT = "Phishing campaign targeting finance department using domain secure-login-update.com and IP 185.199.108.153, linked to LockBit ransomware and FIN7 threat actor, exploiting CVE-2023-3519.";
+
 // Icons for different attack phases
 const PHASE_ICONS = {
   'Reconnaissance': '🔍',
@@ -37,12 +39,41 @@ function getPhaseIcon(phase) {
   return '🔹';
 }
 
-export default function AttackPath() {
+export default function AttackPath({ activeAnalysis = null }) {
   const [attackPath, setAttackPath] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [threatText, setThreatText] = useState('');
+  const [currentInput, setCurrentInput] = useState('');
   const [isCustom, setIsCustom] = useState(false);
+
+  // Derive the threat text from the global analysis when available
+  const analysisInput = activeAnalysis?.raw_input || activeAnalysis?.content || '';
+
+  const fetchPathForText = async (text) => {
+    if (!text?.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/attack-path`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threat_text: text }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAttackPath(data);
+        setCurrentInput(text);
+      } else {
+        throw new Error(`API error: ${response.status}`);
+      }
+    } catch (e) {
+      console.warn('Attack path generation failed:', e);
+      setError('Failed to generate attack path. Check your API key and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchDefaultPath = async () => {
     setLoading(true);
@@ -52,6 +83,7 @@ export default function AttackPath() {
       if (response.ok) {
         const data = await response.json();
         setAttackPath(data);
+        setCurrentInput(DEFAULT_THREAT_TEXT);
       } else {
         throw new Error(`API error: ${response.status}`);
       }
@@ -65,31 +97,19 @@ export default function AttackPath() {
 
   const fetchCustomPath = async () => {
     if (!threatText.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE}/attack-path`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threat_text: threatText }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAttackPath(data);
-      } else {
-        throw new Error(`API error: ${response.status}`);
-      }
-    } catch (e) {
-      console.warn('Attack path generation failed:', e);
-      setError('Failed to generate attack path. Check your API key and try again.');
-    } finally {
-      setLoading(false);
-    }
+    await fetchPathForText(threatText);
   };
 
+  // When a new global analysis arrives, auto-generate for its input
   useEffect(() => {
-    fetchDefaultPath();
-  }, []);
+    if (analysisInput) {
+      setIsCustom(false);
+      setThreatText('');
+      fetchPathForText(analysisInput);
+    } else {
+      fetchDefaultPath();
+    }
+  }, [analysisInput]);
 
   return (
     <div className="attack-path-container animate-fade-in">
@@ -173,7 +193,32 @@ export default function AttackPath() {
         <div className="attack-path-timeline-card card">
           <div className="attack-path-meta">
             <h3>{attackPath.title}</h3>
-            <p>{attackPath.summary}</p>
+            {currentInput && (
+              <div className="attack-path-input-context" style={{
+                marginTop: '10px',
+                padding: '12px 16px',
+                backgroundColor: 'var(--bg-primary)',
+                borderLeft: '4px solid var(--color-medium)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.85rem',
+                color: 'var(--text-secondary)',
+                lineHeight: '1.4'
+              }}>
+                <span style={{ 
+                  display: 'block', 
+                  fontSize: '0.75rem', 
+                  fontWeight: '700', 
+                  color: 'var(--color-medium)',
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.05em', 
+                  marginBottom: '4px' 
+                }}>
+                  Threat Input:
+                </span>
+                "{currentInput}"
+              </div>
+            )}
+            <p style={{ marginTop: '16px' }}>{attackPath.summary}</p>
           </div>
 
           <div className="attack-path-timeline">

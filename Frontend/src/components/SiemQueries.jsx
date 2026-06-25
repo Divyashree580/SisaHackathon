@@ -155,6 +155,36 @@ export default function SiemQueries({ activeAnalysis = null }) {
           <h2 className="card-title">SIEM Query Generation</h2>
           <p className="card-subtitle">Auto-generated detection queries for major SIEM platforms based on extracted IOCs</p>
         </div>
+
+        {/* Raw input context */}
+        {activeAnalysis?.raw_input && (
+          <div style={{
+            margin: '0 0 16px 0',
+            padding: '14px 18px',
+            backgroundColor: 'var(--bg-primary)',
+            borderLeft: '4px solid var(--color-medium)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.875rem',
+            color: 'var(--text-secondary)',
+            lineHeight: '1.6',
+          }}>
+            <span style={{
+              display: 'block',
+              fontSize: '0.7rem',
+              fontWeight: '700',
+              color: 'var(--color-medium)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              marginBottom: '6px',
+            }}>
+              📥 Threat Input
+            </span>
+            <span style={{ fontStyle: 'italic', color: 'var(--text-primary)' }}>
+              "{activeAnalysis.raw_input}"
+            </span>
+          </div>
+        )}
+
         <div className="siem-ioc-context">
           <div className="siem-ioc-chip">
             <span className="siem-ioc-type">Domain Target</span>

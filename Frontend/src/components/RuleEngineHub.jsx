@@ -134,6 +134,35 @@ export default function RuleEngineHub({ history = [], activeAnalysis, onSelectTh
         </div>
       </div>
 
+      {/* Threat Input Context box */}
+      {selectedThreat && (
+        <div className="analysis-input-context animate-fade-in" style={{
+          marginBottom: '20px',
+          padding: '12px 16px',
+          backgroundColor: 'var(--bg-secondary)',
+          borderLeft: '4px solid var(--color-medium)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '0.85rem',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.4',
+          border: '1px solid var(--border-light)',
+          borderLeftWidth: '4px'
+        }}>
+          <span style={{ 
+            display: 'block', 
+            fontSize: '0.75rem', 
+            fontWeight: '700', 
+            color: 'var(--color-medium)',
+            textTransform: 'uppercase', 
+            letterSpacing: '0.05em', 
+            marginBottom: '4px' 
+          }}>
+            Threat Input Rule Context:
+          </span>
+          "{selectedThreat.raw_input || 'N/A'}"
+        </div>
+      )}
+
       <div className="rules-hub-layout">
         {/* Left Options Controller */}
         <div className="rules-controller card">

@@ -135,31 +135,124 @@ function convertToCytoscapeElements(graphData) {
   return elements;
 }
 
-export default function IocGraph() {
+function generateIocGraphData(activeAnalysis) {
+  if (!activeAnalysis) {
+    return FALLBACK_GRAPH;
+  }
+
+  const nodes = [];
+  const edges = [];
+  const addedNodeIds = new Set();
+
+  const addNode = (id, type) => {
+    if (!id) return;
+    const cleanId = id.trim();
+    if (!cleanId || addedNodeIds.has(cleanId)) return;
+    nodes.push({ id: cleanId, type });
+    addedNodeIds.add(cleanId);
+  };
+
+  const addEdge = (source, target) => {
+    if (!source || !target) return;
+    const s = source.trim();
+    const t = target.trim();
+    if (!s || !t || s === t) return;
+    // Prevent duplicate edges
+    const exists = edges.some(e => (e.source === s && e.target === t) || (e.source === t && e.target === s));
+    if (!exists) {
+      edges.push({ source: s, target: t });
+    }
+  };
+
+  // 1. Gather all IOCs from activeAnalysis
+  const iocs = activeAnalysis.iocs || [];
+  const domains = [];
+  const ips = [];
+  const hashes = [];
+  const cves = [];
+
+  iocs.forEach(ioc => {
+    const type = ioc.type?.toLowerCase();
+    if (type === 'domain' || type === 'url') {
+      let cleanVal = ioc.value;
+      if (cleanVal.startsWith('http://') || cleanVal.startsWith('https://')) {
+        try {
+          cleanVal = new URL(cleanVal).hostname;
+        } catch (e) {}
+      }
+      addNode(cleanVal, 'domain');
+      domains.push(cleanVal);
+    } else if (type === 'ipv4' || type === 'ip') {
+      addNode(ioc.value, 'ip');
+      ips.push(ioc.value);
+    } else if (type === 'sha256' || type === 'md5' || type === 'sha1' || type === 'hash') {
+      addNode(ioc.value, 'malware');
+      hashes.push(ioc.value);
+    } else if (type === 'cve id' || type === 'cve') {
+      addNode(ioc.value, 'cve');
+      cves.push(ioc.value);
+    }
+  });
+
+  // 2. Gather malware families and threat actors from enrichment
+  const enrichment = activeAnalysis.enrichment || {};
+  const malwareFamilies = enrichment.malware_families || [];
+  const threatActors = enrichment.threat_actors || [];
+
+  malwareFamilies.forEach(m => addNode(m, 'malware'));
+  threatActors.forEach(a => addNode(a, 'malware'));
+
+  if (enrichment.cve_id && enrichment.cve_id !== 'N/A') {
+    addNode(enrichment.cve_id, 'cve');
+    cves.push(enrichment.cve_id);
+  }
+
+  // 3. Connect nodes logically
+  // Connect domains to IPs
+  domains.forEach(d => {
+    ips.forEach(ip => addEdge(d, ip));
+  });
+
+  // Connect IPs to Malware (hashes, families, actors)
+  ips.forEach(ip => {
+    hashes.forEach(h => addEdge(ip, h));
+    malwareFamilies.forEach(m => addEdge(ip, m));
+    threatActors.forEach(a => addEdge(ip, a));
+  });
+
+  // Connect Malware to CVEs
+  malwareFamilies.forEach(m => {
+    cves.forEach(c => addEdge(m, c));
+  });
+  threatActors.forEach(a => {
+    cves.forEach(c => addEdge(a, c));
+  });
+  hashes.forEach(h => {
+    cves.forEach(c => addEdge(h, c));
+  });
+
+  // If no edges were generated, let's create a linear tree
+  if (edges.length === 0 && nodes.length > 1) {
+    for (let i = 0; i < nodes.length - 1; i++) {
+      addEdge(nodes[i].id, nodes[i + 1].id);
+    }
+  }
+
+  return { nodes, edges };
+}
+
+export default function IocGraph({ activeAnalysis = null }) {
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [hoveredNode, setHoveredNode] = useState(null);
   const cyRef = useRef(null);
 
   useEffect(() => {
-    const fetchGraph = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/ioc/graph`);
-        if (response.ok) {
-          const data = await response.json();
-          setGraphData(data);
-        } else {
-          throw new Error(`API error: ${response.status}`);
-        }
-      } catch (e) {
-        console.warn('IOC graph API unavailable, using fallback:', e);
-        setGraphData(FALLBACK_GRAPH);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchGraph();
-  }, []);
+    setLoading(true);
+    const data = generateIocGraphData(activeAnalysis);
+    setGraphData(data);
+    setLoading(false);
+  }, [activeAnalysis]);
 
   const handleCyReady = (cy) => {
     cyRef.current = cy;
@@ -249,6 +342,33 @@ export default function IocGraph() {
               <RefreshCw size={16} />
             </button>
           </div>
+        </div>
+
+        {/* Threat Input Context box */}
+        <div className="analysis-input-context animate-fade-in" style={{
+          margin: '0 24px 16px 24px',
+          padding: '12px 16px',
+          backgroundColor: 'var(--bg-primary)',
+          borderLeft: '4px solid var(--color-medium)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '0.85rem',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.4'
+        }}>
+          <span style={{ 
+            display: 'block', 
+            fontSize: '0.75rem', 
+            fontWeight: '700', 
+            color: 'var(--color-medium)',
+            textTransform: 'uppercase', 
+            letterSpacing: '0.05em', 
+            marginBottom: '4px' 
+          }}>
+            Threat Graph Context:
+          </span>
+          <span style={{ fontStyle: 'italic', color: 'var(--text-primary)' }}>
+            "{activeAnalysis?.raw_input || 'Phishing campaign targeting finance department using domain secure-login-update.com and IP 185.199.108.153, linked to LockBit ransomware and FIN7 threat actor, exploiting CVE-2023-3519.'}"
+          </span>
         </div>
 
         <div className="ioc-graph-viewport">

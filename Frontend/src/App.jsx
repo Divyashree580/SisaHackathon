@@ -241,12 +241,12 @@ export default function App() {
 
         {/* IOC Relationship Graph Tab */}
         {activeTab === 'ioc-graph' && (
-          <IocGraph />
+          <IocGraph activeAnalysis={activeAnalysis} />
         )}
 
         {/* Attack Path Prediction Tab */}
         {activeTab === 'attack-path' && (
-          <AttackPath />
+          <AttackPath activeAnalysis={activeAnalysis} />
         )}
 
         {/* SIEM Queries Tab */}

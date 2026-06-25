@@ -294,6 +294,31 @@ export default function InteractiveGraph({ analysisData }) {
         </div>
       </div>
 
+      {/* Threat Input Context box */}
+      <div className="analysis-input-context animate-fade-in" style={{
+        margin: '0 24px 16px 24px',
+        padding: '12px 16px',
+        backgroundColor: 'var(--bg-primary)',
+        borderLeft: '4px solid var(--color-medium)',
+        borderRadius: 'var(--radius-sm)',
+        fontSize: '0.85rem',
+        color: 'var(--text-secondary)',
+        lineHeight: '1.4'
+      }}>
+        <span style={{ 
+          display: 'block', 
+          fontSize: '0.75rem', 
+          fontWeight: '700', 
+          color: 'var(--color-medium)',
+          textTransform: 'uppercase', 
+          letterSpacing: '0.05em', 
+          marginBottom: '4px' 
+        }}>
+          Threat Graph Context:
+        </span>
+        "{analysisData.raw_input || 'N/A'}"
+      </div>
+
       <div className="graph-viewport-container">
         {/* SVG Graph Viewport */}
         <div className="graph-svg-wrapper">
