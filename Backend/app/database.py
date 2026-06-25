@@ -15,17 +15,21 @@ async def init_db():
     Called on FastAPI startup event.
     """
     global client, db
-    client = AsyncIOMotorClient(settings.MONGODB_URI)
-    db = client[settings.MONGODB_DATABASE]
+    try:
+        # Set a short timeout so Vercel doesn't block forever if the MongoDB URI is unreachable
+        client = AsyncIOMotorClient(settings.MONGODB_URI, serverSelectionTimeoutMS=2000)
+        db = client[settings.MONGODB_DATABASE]
 
-    # Create indexes for performance
-    await db.analyses.create_index("analysis_id", unique=True)
-    await db.analyses.create_index("timestamp")
-    await db.analyses.create_index("risk_level")
-    await db.analyses.create_index("input_type")
-    await db.ai_cache.create_index("cache_key", unique=True)
+        # Create indexes for performance (this will trigger a connection attempt)
+        await db.analyses.create_index("analysis_id", unique=True)
+        await db.analyses.create_index("timestamp")
+        await db.analyses.create_index("risk_level")
+        await db.analyses.create_index("input_type")
+        await db.ai_cache.create_index("cache_key", unique=True)
 
-    logger.info(f"MongoDB connected: {settings.MONGODB_URI} / {settings.MONGODB_DATABASE}")
+        logger.info(f"MongoDB connected: {settings.MONGODB_URI} / {settings.MONGODB_DATABASE}")
+    except Exception as e:
+        logger.error(f"Failed to initialize/index MongoDB (is the database unreachable?): {str(e)}")
 
 
 async def close_db():
