@@ -16,7 +16,7 @@ export default function AIReportViewer({ report = {} }) {
       <div className="card-header">
         <div className="header-badge-row">
           <h2>AI Copilot Threat Report</h2>
-          <span className="badge badge-accent">Claude 3.5 Sonnet Generated</span>
+          <span className="badge badge-accent">Groq llama-3.3-70b-versatile Generated</span>
         </div>
         <span className="card-subtitle">Automated, context-rich intelligence brief and defense strategy</span>
       </div>
@@ -45,7 +45,7 @@ export default function AIReportViewer({ report = {} }) {
             <div className="report-text-section animate-fade-in">
               <h3>Incident Overview</h3>
               <p className="summary-paragraph">{report.summary || 'Generating summary...'}</p>
-              
+
               <div className="report-callout note-callout">
                 <h4><ShieldAlert size={16} /> Analyst Assessment</h4>
                 <p>Verify all associated IP addresses are blocked on edge gateways immediately. System logs show signatures matching persistent campaigns targeting similar technical infrastructure.</p>
@@ -57,7 +57,7 @@ export default function AIReportViewer({ report = {} }) {
             <div className="report-text-section animate-fade-in">
               <h3>Attack Path Prediction</h3>
               <p className="scenario-paragraph">{report.attack_scenario || 'Generating attack timeline...'}</p>
-              
+
               <div className="kill-chain-timeline">
                 <div className="timeline-node">
                   <div className="node-marker">1</div>

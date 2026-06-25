@@ -34,7 +34,7 @@ class Settings:
     
     # CORS Configurations
     CORS_ORIGINS: list = [
-        "*"
+        origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()
     ]
 
 settings = Settings()
