@@ -1,11 +1,14 @@
 import React from 'react';
-import { LayoutDashboard, ShieldAlert, Network, Terminal, Database, Activity } from 'lucide-react';
+import { LayoutDashboard, ShieldAlert, Network, Terminal, Database, Activity, Search, GitBranch, Crosshair } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, apiOnline }) {
   const navItems = [
     { id: 'overview', name: 'Home Overview', icon: LayoutDashboard },
     { id: 'analyzer', name: 'Threat Analyzer', icon: ShieldAlert },
     { id: 'graph', name: 'Threat Graph', icon: Network },
+    { id: 'ioc-graph', name: 'IOC Relationships', icon: GitBranch },
+    { id: 'attack-path', name: 'Attack Path', icon: Crosshair },
+    { id: 'siem', name: 'SIEM Queries', icon: Search },
     { id: 'rules', name: 'Rule Engine Hub', icon: Terminal },
     { id: 'history', name: 'Analysis Logs', icon: Database },
     { id: 'health', name: 'System Health', icon: Activity },

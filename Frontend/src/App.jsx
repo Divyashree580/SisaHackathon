@@ -11,8 +11,11 @@ import HistoryList from './components/HistoryList';
 import OverviewDashboard from './components/OverviewDashboard';
 import SystemHealth from './components/SystemHealth';
 import RuleEngineHub from './components/RuleEngineHub';
-import { api, loadHistoryFromStorage } from './services/api';
+import SiemQueries from './components/SiemQueries';
+import IocGraph from './components/IocGraph';
+import AttackPath from './components/AttackPath';
 import { Activity, ShieldAlert, BookOpen, Layers, ShieldCheck } from 'lucide-react';
+import { api, loadHistoryFromStorage } from './services/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -22,11 +25,20 @@ export default function App() {
   const [apiOnline, setApiOnline] = useState(false);
   const [activeSection, setActiveSection] = useState('risk'); // 'risk' | 'summary' | 'iocs' | 'mitre' | 'rules'
 
-  // Check API health and load default history on start
+  // Load default history on start
   useEffect(() => {
-    const checkApiAndLoadHistory = async () => {
+    const logs = loadHistoryFromStorage();
+    setHistoryList(logs);
+    if (logs.length > 0) {
+      setActiveAnalysis(logs[0]);
+    }
+  }, []);
+
+  // Poll API health continuously to update connection status
+  useEffect(() => {
+    const checkApiStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/analyses?page=1&pageSize=1', {
+        const response = await fetch('http://localhost:8000/health', {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
           signal: AbortSignal.timeout(1500) // Fast timeout for health check
@@ -35,17 +47,31 @@ export default function App() {
       } catch (e) {
         setApiOnline(false);
       }
-
-      // Load history (seeds loaded automatically if empty)
-      const logs = loadHistoryFromStorage();
-      setHistoryList(logs);
-      if (logs.length > 0) {
-        setActiveAnalysis(logs[0]);
-      }
     };
 
-    checkApiAndLoadHistory();
+    // Initial check on mount
+    checkApiStatus();
+
+    // Poll every 5 seconds
+    const interval = setInterval(checkApiStatus, 5000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  // Automatically switch tabs if the current one is disabled for the active analysis
+  useEffect(() => {
+    if (!activeAnalysis) return;
+    const opts = activeAnalysis.options;
+    if (opts) {
+      if (activeSection === 'risk' && opts.risk_scoring === false) {
+        setActiveSection('summary');
+      } else if (activeSection === 'mitre' && opts.mitre_mapping === false) {
+        setActiveSection('summary');
+      } else if (activeSection === 'rules' && opts.generate_rules === false) {
+        setActiveSection('summary');
+      }
+    }
+  }, [activeAnalysis, activeSection]);
 
   const handleAnalyze = async (payload) => {
     setLoading(true);
@@ -53,12 +79,14 @@ export default function App() {
       let result;
       if (payload.inputType === 'file') {
         result = await api.uploadThreatFile(payload.file, {
-          selectedPresetId: payload.selectedPresetId
+          selectedPresetId: payload.selectedPresetId,
+          options: payload.options
         });
       } else {
         result = await api.analyzeThreat(payload.content, {
           inputType: payload.inputType,
-          selectedPresetId: payload.selectedPresetId
+          selectedPresetId: payload.selectedPresetId,
+          options: payload.options
         });
       }
       
@@ -123,13 +151,15 @@ export default function App() {
                   
                   {/* Results Panel Switch Tabs */}
                   <div className="results-nav-tabs">
-                    <button 
-                      className={`res-tab-btn ${activeSection === 'risk' ? 'active' : ''}`}
-                      onClick={() => setActiveSection('risk')}
-                    >
-                      <ShieldCheck size={16} />
-                      <span>Risk Engine</span>
-                    </button>
+                    {(!activeAnalysis.options || activeAnalysis.options.risk_scoring !== false) && (
+                      <button 
+                        className={`res-tab-btn ${activeSection === 'risk' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('risk')}
+                      >
+                        <ShieldCheck size={16} />
+                        <span>Risk Engine</span>
+                      </button>
+                    )}
                     <button 
                       className={`res-tab-btn ${activeSection === 'summary' ? 'active' : ''}`}
                       onClick={() => setActiveSection('summary')}
@@ -144,20 +174,24 @@ export default function App() {
                       <ShieldAlert size={16} />
                       <span>IOC Registry ({activeAnalysis.iocs?.length || 0})</span>
                     </button>
-                    <button 
-                      className={`res-tab-btn ${activeSection === 'mitre' ? 'active' : ''}`}
-                      onClick={() => setActiveSection('mitre')}
-                    >
-                      <Layers size={16} />
-                      <span>MITRE Matrix</span>
-                    </button>
-                    <button 
-                      className={`res-tab-btn ${activeSection === 'rules' ? 'active' : ''}`}
-                      onClick={() => setActiveSection('rules')}
-                    >
-                      <Activity size={16} />
-                      <span>Detection Rules</span>
-                    </button>
+                    {(!activeAnalysis.options || activeAnalysis.options.mitre_mapping !== false) && (
+                      <button 
+                        className={`res-tab-btn ${activeSection === 'mitre' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('mitre')}
+                      >
+                        <Layers size={16} />
+                        <span>MITRE Matrix</span>
+                      </button>
+                    )}
+                    {(!activeAnalysis.options || activeAnalysis.options.generate_rules !== false) && (
+                      <button 
+                        className={`res-tab-btn ${activeSection === 'rules' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('rules')}
+                      >
+                        <Activity size={16} />
+                        <span>Detection Rules</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Tab Renderers */}
@@ -203,6 +237,21 @@ export default function App() {
           <div className="graph-tab-view animate-fade-in">
             <InteractiveGraph analysisData={activeAnalysis} />
           </div>
+        )}
+
+        {/* IOC Relationship Graph Tab */}
+        {activeTab === 'ioc-graph' && (
+          <IocGraph />
+        )}
+
+        {/* Attack Path Prediction Tab */}
+        {activeTab === 'attack-path' && (
+          <AttackPath />
+        )}
+
+        {/* SIEM Queries Tab */}
+        {activeTab === 'siem' && (
+          <SiemQueries activeAnalysis={activeAnalysis} />
         )}
 
         {/* Rule Engine Workstation Tab */}

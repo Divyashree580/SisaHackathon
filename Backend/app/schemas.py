@@ -90,6 +90,7 @@ class ThreatAnalysisResponse(BaseModel):
     detection_rules: Optional[DetectionRulesSchema] = None
     errors: List[PipelineError] = []
     pipeline_timing: Optional[PipelineTiming] = None
+    options: Optional[OptionsSchema] = None
 
 
 class HistoryListResponse(BaseModel):

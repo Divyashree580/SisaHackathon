@@ -12,6 +12,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from .siem import router as siem_router
+from .ioc_graph import router as ioc_graph_router
+from .attack_path import router as attack_path_router
+from .threat_feed import router as threat_feed_router
+from .yara import router as yara_router
 from app.database import init_db, close_db, get_db, save_analysis, get_analyses_history, get_analysis_by_id, check_db_health
 from app.cache import compute_cache_key, get_from_cache, store_in_cache
 from app.schemas import (
@@ -89,6 +94,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# REGISTER BONUS-FEATURE ROUTERS
+# ──────────────────────────────────────────────────────────────────────────────
+app.include_router(yara_router, tags=["YARA"])
+app.include_router(siem_router, prefix="/api", tags=["SIEM"])
+app.include_router(ioc_graph_router, prefix="/api", tags=["IOC Graph"])
+app.include_router(attack_path_router, prefix="/api", tags=["Attack Path"])
+app.include_router(threat_feed_router, prefix="/api", tags=["Threat Feed"])
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -273,7 +288,8 @@ async def run_threat_pipeline(
         "ai_report": ai_results.get("ai_report", {}),
         "detection_rules": detection_rules,
         "errors": errors,
-        "pipeline_timing": timing
+        "pipeline_timing": timing,
+        "options": options.model_dump()
     }
 
     # Persist to MongoDB

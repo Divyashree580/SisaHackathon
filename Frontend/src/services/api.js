@@ -555,8 +555,9 @@ level: low`,
 ];
 
 // Heuristics Engine to analyze arbitrary inputs
-export function processThreatLocally(content, inputType = 'text', filename = '') {
+export function processThreatLocally(content, inputType = 'text', filename = '', options = null) {
   const normalizedContent = content || '';
+  const pipelineOptions = options || { mitre_mapping: true, generate_rules: true, risk_scoring: true };
   
   // 1. Extract IOCs using regex
   const ips = cleanMatches(normalizedContent.match(REGEX_IPV4) || []);
@@ -607,68 +608,74 @@ export function processThreatLocally(content, inputType = 'text', filename = '')
   // Determine risk factors and calculate score
   const risk_factors = [];
   let score = 0;
-
-  // CVSS Score Factor
-  if (isRansomware || contains(normalizedContent, ['critical', 'rce', 'cve-2023-46604'])) {
-    risk_factors.push({ name: 'CVSS > 9 (Critical CVSS Vulnerability/Payload)', points: 30 });
-    score += 30;
-  } else if (isPhishing || isExploit || contains(normalizedContent, ['high', 'backdoor', 'trojan'])) {
-    risk_factors.push({ name: 'CVSS 7–9 (High Severity System Indicator)', points: 20 });
-    score += 20;
-  } else {
-    risk_factors.push({ name: 'CVSS 4–7 (Medium System Threat Exposure)', points: 10 });
-    score += 10;
-  }
-
-  // Exploit available
-  if (isExploit || isRansomware || contains(normalizedContent, ['exploit available', 'poc', 'metasploit', 'sideloading'])) {
-    risk_factors.push({ name: 'Public exploit available (PoC publicly published)', points: 25 });
-    score += 25;
-    isExploit = true;
-  }
-
-  // Malware Associated
-  if (isRansomware || contains(normalizedContent, ['malware', 'backdoor', 'loader', 'plugx', 'agent', 'shadowpad', 'kinsing'])) {
-    risk_factors.push({ name: 'Malware associated (Active loader, Trojan, or RAT)', points: 15 });
-    score += 15;
-    hasMalware = true;
-  }
-
-  // Threat Actor Known
-  if (contains(normalizedContent, ['apt', 'actor', 'group', 'nobelium', 'lockbit group', 'barium', 'kinsing group'])) {
-    risk_factors.push({ name: 'Known threat actor (Attributed group activity)', points: 10 });
-    score += 10;
-    hasThreatActor = true;
-  }
-
-  // IOC Reputation
-  if (iocs.length > 3 || contains(normalizedContent, ['tor', 'onion', 'malicious', 'c2', 'reputation'])) {
-    risk_factors.push({ name: 'High IOC reputation (Active reputation blacklists)', points: 20 });
-    score += 20;
-    hasHighReputationIOC = true;
-  }
-
-  score = Math.min(100, score);
-  
   let risk_level = 'Low';
-  if (score > 80) risk_level = 'Critical';
-  else if (score > 60) risk_level = 'High';
-  else if (score > 30) risk_level = 'Medium';
+
+  if (pipelineOptions.risk_scoring !== false) {
+    // CVSS Score Factor
+    if (isRansomware || contains(normalizedContent, ['critical', 'rce', 'cve-2023-46604'])) {
+      risk_factors.push({ name: 'CVSS > 9 (Critical CVSS Vulnerability/Payload)', points: 30 });
+      score += 30;
+    } else if (isPhishing || isExploit || contains(normalizedContent, ['high', 'backdoor', 'trojan'])) {
+      risk_factors.push({ name: 'CVSS 7–9 (High Severity System Indicator)', points: 20 });
+      score += 20;
+    } else {
+      risk_factors.push({ name: 'CVSS 4–7 (Medium System Threat Exposure)', points: 10 });
+      score += 10;
+    }
+
+    // Exploit available
+    if (isExploit || isRansomware || contains(normalizedContent, ['exploit available', 'poc', 'metasploit', 'sideloading'])) {
+      risk_factors.push({ name: 'Public exploit available (PoC publicly published)', points: 25 });
+      score += 25;
+      isExploit = true;
+    }
+
+    // Malware Associated
+    if (isRansomware || contains(normalizedContent, ['malware', 'backdoor', 'loader', 'plugx', 'agent', 'shadowpad', 'kinsing'])) {
+      risk_factors.push({ name: 'Malware associated (Active loader, Trojan, or RAT)', points: 15 });
+      score += 15;
+      hasMalware = true;
+    }
+
+    // Threat Actor Known
+    if (contains(normalizedContent, ['apt', 'actor', 'group', 'nobelium', 'lockbit group', 'barium', 'kinsing group'])) {
+      risk_factors.push({ name: 'Known threat actor (Attributed group activity)', points: 10 });
+      score += 10;
+      hasThreatActor = true;
+    }
+
+    // IOC Reputation
+    if (iocs.length > 3 || contains(normalizedContent, ['tor', 'onion', 'malicious', 'c2', 'reputation'])) {
+      risk_factors.push({ name: 'High IOC reputation (Active reputation blacklists)', points: 20 });
+      score += 20;
+      hasHighReputationIOC = true;
+    }
+
+    score = Math.min(100, score);
+    
+    if (score > 80) risk_level = 'Critical';
+    else if (score > 60) risk_level = 'High';
+    else if (score > 30) risk_level = 'Medium';
+  } else {
+    risk_level = 'N/A';
+  }
 
   // 3. MITRE Mapping
   const mitre_mapping = [];
-  if (isPhishing) {
-    mitre_mapping.push({ tactic: 'Initial Access', technique: 'Phishing: Spearphishing Attachment', technique_id: 'T1566.001', confidence: 'High' });
-    mitre_mapping.push({ tactic: 'Execution', technique: 'User Execution: Malicious File', technique_id: 'T1204.002', confidence: 'High' });
-  } else if (isExploit) {
-    mitre_mapping.push({ tactic: 'Initial Access', technique: 'Exploit Public-Facing Application', technique_id: 'T1190', confidence: 'High' });
-    mitre_mapping.push({ tactic: 'Execution', technique: 'Exploitation for Client Execution', technique_id: 'T1203', confidence: 'Medium' });
-  } else if (isRansomware) {
-    mitre_mapping.push({ tactic: 'Initial Access', technique: 'Exploit Public-Facing Application', technique_id: 'T1190', confidence: 'High' });
-    mitre_mapping.push({ tactic: 'Impact', technique: 'Data Encrypted for Impact', technique_id: 'T1486', confidence: 'Critical' });
-    mitre_mapping.push({ tactic: 'Command and Control', technique: 'Application Layer Protocol', technique_id: 'T1071', confidence: 'High' });
-  } else {
-    mitre_mapping.push({ tactic: 'Reconnaissance', technique: 'Active Scanning', technique_id: 'T1595', confidence: 'Medium' });
+  if (pipelineOptions.mitre_mapping !== false) {
+    if (isPhishing) {
+      mitre_mapping.push({ tactic: 'Initial Access', technique: 'Phishing: Spearphishing Attachment', technique_id: 'T1566.001', confidence: 'High' });
+      mitre_mapping.push({ tactic: 'Execution', technique: 'User Execution: Malicious File', technique_id: 'T1204.002', confidence: 'High' });
+    } else if (isExploit) {
+      mitre_mapping.push({ tactic: 'Initial Access', technique: 'Exploit Public-Facing Application', technique_id: 'T1190', confidence: 'High' });
+      mitre_mapping.push({ tactic: 'Execution', technique: 'Exploitation for Client Execution', technique_id: 'T1203', confidence: 'Medium' });
+    } else if (isRansomware) {
+      mitre_mapping.push({ tactic: 'Initial Access', technique: 'Exploit Public-Facing Application', technique_id: 'T1190', confidence: 'High' });
+      mitre_mapping.push({ tactic: 'Impact', technique: 'Data Encrypted for Impact', technique_id: 'T1486', confidence: 'Critical' });
+      mitre_mapping.push({ tactic: 'Command and Control', technique: 'Application Layer Protocol', technique_id: 'T1071', confidence: 'High' });
+    } else {
+      mitre_mapping.push({ tactic: 'Reconnaissance', technique: 'Active Scanning', technique_id: 'T1595', confidence: 'Medium' });
+    }
   }
 
   // 4. Generate AI Report
@@ -695,7 +702,14 @@ export function processThreatLocally(content, inputType = 'text', filename = '')
   // 5. Generate Sigma Rule
   const mainIocValue = sha256s[0] || ips[0] || domains[0] || 'Malicious_Value';
   const detectionField = sha256s[0] ? 'Hashes|contains' : ips[0] ? 'DestinationIp' : domains[0] ? 'QueryName' : 'CommandLine';
-  const sigmaRule = `title: Extracted IOC Network/File Block Event
+  
+  let sigmaRule = "";
+  let yaraRule = "";
+  let splunkQuery = "";
+  let kqlQuery = "";
+
+  if (pipelineOptions.generate_rules !== false) {
+    sigmaRule = `title: Extracted IOC Network/File Block Event
 id: ${Math.random().toString(36).substring(2, 15)}-${Math.random().toString(36).substring(2, 15)}
 status: experimental
 description: Detects traffic or file matching extracted indicators: ${mainIocValue}
@@ -710,8 +724,7 @@ falsepositives:
     - Internal validation testing
 level: ${risk_level.toLowerCase()}`;
 
-  // 6. Generate YARA Rule
-  const yaraRule = `rule Local_Threat_IOC_Rule {
+    yaraRule = `rule Local_Threat_IOC_Rule {
     meta:
         description = "Detects files containing signatures or references extracted locally"
         date = "${new Date().toISOString().split('T')[0]}"
@@ -727,14 +740,14 @@ level: ${risk_level.toLowerCase()}`;
         any of ($*)
 }`;
 
-  // 7. SIEM query templates
-  const splunkQuery = `index=security (${ips.map(ip => `"${ip}"`).concat(domains.map(d => `"${d}"`)).concat(sha256s.map(h => `"${h}"`)).join(' OR ') || 'no IOCs found'})
+    splunkQuery = `index=security (${ips.map(ip => `"${ip}"`).concat(domains.map(d => `"${d}"`)).concat(sha256s.map(h => `"${h}"`)).join(' OR ') || 'no IOCs found'})
 | table _time, host, src_ip, dest_ip, query, process_name, file_hash`;
 
-  const kqlQuery = `DeviceEvents
+    kqlQuery = `DeviceEvents
 | where ProcessCommandLine has_any ("${ips.concat(domains).concat(sha256s).join('", "') || 'empty'}") 
   or NetworkIPHashes has_any ("${sha256s.join('", "') || 'empty'}")
 | project TimeGenerated, DeviceName, ActionType, ProcessCommandLine`;
+  }
 
   return {
     analysis_id: `local-${Math.random().toString(36).substring(2, 9)}`,
@@ -760,7 +773,8 @@ level: ${risk_level.toLowerCase()}`;
       yara: yaraRule,
       splunk: splunkQuery,
       kql: kqlQuery
-    }
+    },
+    options: pipelineOptions
   };
 }
 
@@ -796,20 +810,40 @@ export function saveHistoryToStorage(history) {
 // API Functions
 export const api = {
   // Submit raw threat analysis
-  analyzeThreat: async (content, options = {}) => {
-    const { inputType = 'text', filename = '', selectedPresetId = null } = options;
+  analyzeThreat: async (content, params = {}) => {
+    const { inputType = 'text', filename = '', selectedPresetId = null, options = null } = params;
 
     // Check if preset selected
     if (selectedPresetId) {
       const preset = SEED_SCENARIOS.find(s => s.id === selectedPresetId);
       if (preset) {
-        // Add to history
-        const result = { ...preset.data, timestamp: new Date().toISOString() };
+        // Add to history and apply options filters to the static preset data
+        const pipelineOptions = options || { mitre_mapping: true, generate_rules: true, risk_scoring: true };
+        const result = { ...preset.data, timestamp: new Date().toISOString(), options: pipelineOptions };
+        
+        if (pipelineOptions.mitre_mapping === false) {
+          result.mitre_mapping = [];
+        }
+        if (pipelineOptions.generate_rules === false) {
+          result.detection_rules = { sigma: "", yara: "", splunk: "", kql: "" };
+        }
+        if (pipelineOptions.risk_scoring === false) {
+          result.risk_score = 0;
+          result.risk_level = "N/A";
+          result.risk_factors = [];
+        }
+
         const history = loadHistoryFromStorage();
         saveHistoryToStorage([result, ...history.filter(h => h.analysis_id !== result.analysis_id)]);
         return result;
       }
     }
+
+    const requestOptions = options || {
+      mitre_mapping: true,
+      generate_rules: true,
+      risk_scoring: true
+    };
 
     // Attempt API request
     try {
@@ -819,11 +853,7 @@ export const api = {
         body: JSON.stringify({
           input_type: inputType,
           content: content,
-          options: {
-            mitre_mapping: true,
-            generate_rules: true,
-            risk_scoring: true
-          }
+          options: requestOptions
         })
       });
       if (response.ok) {
@@ -837,7 +867,7 @@ export const api = {
     } catch (err) {
       console.warn('API connection failed. Processing threat locally.', err);
       // Run local processor
-      const result = processThreatLocally(content, inputType, filename);
+      const result = processThreatLocally(content, inputType, filename, requestOptions);
       const history = loadHistoryFromStorage();
       saveHistoryToStorage([result, ...history]);
       return result;
@@ -845,7 +875,9 @@ export const api = {
   },
 
   // Submit file upload
-  uploadThreatFile: async (file, options = {}) => {
+  uploadThreatFile: async (file, params = {}) => {
+    const { selectedPresetId = null, options = null } = params;
+
     // Read file as text for the mock engine first
     const reader = new FileReader();
     const fileContentPromise = new Promise((resolve) => {
@@ -855,14 +887,16 @@ export const api = {
 
     const content = await fileContentPromise;
 
+    const requestOptions = options || {
+      mitre_mapping: true,
+      generate_rules: true,
+      risk_scoring: true
+    };
+
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('options', JSON.stringify({
-        mitre_mapping: true,
-        generate_rules: true,
-        risk_scoring: true
-      }));
+      formData.append('options', JSON.stringify(requestOptions));
 
       const response = await fetch(`${API_BASE}/analyze-threat/upload`, {
         method: 'POST',
@@ -878,10 +912,36 @@ export const api = {
       throw new Error(`API error: ${response.status}`);
     } catch (err) {
       console.warn('API upload failed. Processing file content locally.', err);
-      const result = processThreatLocally(content, 'file', file.name);
+      const result = processThreatLocally(content, 'file', file.name, requestOptions);
       const history = loadHistoryFromStorage();
       saveHistoryToStorage([result, ...history]);
       return result;
+    }
+  },
+
+  // Fetch generated YARA rule from backend
+  getYaraRule: async () => {
+    try {
+      const response = await fetch(`${API_BASE}/yara`);
+      if (response.ok) {
+        return await response.json();
+      }
+      throw new Error(`API error: ${response.status}`);
+    } catch (err) {
+      console.warn('API YARA fetch failed. Using mock data.', err);
+      return {
+        rule_name: 'Phishing_Campaign_June2026',
+        meta: {
+          description: 'Detects artifacts from finance phishing campaign',
+          threat_level: 'critical'
+        },
+        strings: {
+          $domain: 'secure-login-update.com',
+          $ip: '185.199.108.153',
+          $hash: '{ 5d 41 40 2a bc 4b 2a 76 }'
+        },
+        condition: 'any of them'
+      };
     }
   },
 
