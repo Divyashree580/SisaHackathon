@@ -17,6 +17,9 @@ import AttackPath from './components/AttackPath';
 import { Activity, ShieldAlert, BookOpen, Layers, ShieldCheck } from 'lucide-react';
 import { api, loadHistoryFromStorage } from './services/api';
 
+const API_HOST = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [activeAnalysis, setActiveAnalysis] = useState(null);
@@ -38,7 +41,7 @@ export default function App() {
   useEffect(() => {
     const checkApiStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8000/health', {
+        const response = await fetch(`${API_HOST}/health`, {
           method: 'GET',
           headers: { 'Accept': 'application/json' },
           signal: AbortSignal.timeout(1500) // Fast timeout for health check

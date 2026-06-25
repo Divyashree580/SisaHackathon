@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { RefreshCw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api`;
 
 // Fallback graph data if API is down
 const FALLBACK_GRAPH = {

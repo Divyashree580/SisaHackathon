@@ -22,6 +22,15 @@ class Settings:
     NVD_API_URL: str = "https://services.nvd.nist.gov/rest/json/cves/2.0"
     NVD_API_KEY: str = os.getenv("NVD_API_KEY")
     NVD_TIMEOUT_SECONDS: int = 5
+
+    # Server host & port — drives the base URL of this API
+    API_HOST: str = os.getenv("API_HOST", "http://localhost")
+    API_PORT: int = int(os.getenv("API_PORT", "8000"))
+
+    @property
+    def API_BASE_URL(self) -> str:
+        """Full base URL composed from API_HOST and API_PORT."""
+        return f"{self.API_HOST}:{self.API_PORT}"
     
     # CORS Configurations
     CORS_ORIGINS: list = [

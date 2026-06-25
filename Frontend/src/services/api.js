@@ -1,7 +1,7 @@
 // Threat Intelligence API client and local mock processor.
 // This service attempts to call the FastAPI backend, and falls back to local processing if the backend is down.
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api`;
 
 // Regular expressions for IOC extraction
 const REGEX_IPV4 = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;

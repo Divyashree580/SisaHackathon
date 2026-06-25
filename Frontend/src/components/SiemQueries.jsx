@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ClipboardCopy, Check, Database, Search, Server } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api`;
 
 // Fallback queries generator if API is down
 const generateSiemQueries = (domain, ip) => {

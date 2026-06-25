@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Crosshair, ChevronRight, Zap, Send, RotateCw } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api`;
 
 const DEFAULT_THREAT_TEXT = "Phishing campaign targeting finance department using domain secure-login-update.com and IP 185.199.108.153, linked to LockBit ransomware and FIN7 threat actor, exploiting CVE-2023-3519.";
 

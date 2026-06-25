@@ -4,6 +4,8 @@ import {
   Clock, AlertTriangle, CheckCircle2, RotateCw, Server, Zap, Globe
 } from 'lucide-react';
 
+const API_HOST = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 export default function SystemHealth() {
   const [healthData, setHealthData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -13,7 +15,7 @@ export default function SystemHealth() {
   const fetchHealth = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/health', {
+      const response = await fetch(`${API_HOST}/health`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(2000)
@@ -207,7 +209,7 @@ export default function SystemHealth() {
               </div>
               <div className="tel-box">
                 <span className="tel-label">API Gateway Host</span>
-                <span className="tel-value font-mono">http://localhost:8000</span>
+                <span className="tel-value font-mono">{API_HOST}</span>
               </div>
               <div className="tel-box">
                 <span className="tel-label">Engine Version</span>
