@@ -8,11 +8,21 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          d3: ['d3'],
-          cytoscape: ['cytoscape', 'react-cytoscapejs'],
-          recharts: ['recharts'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor';
+            }
+            if (id.includes('d3')) {
+              return 'd3';
+            }
+            if (id.includes('cytoscape') || id.includes('react-cytoscapejs')) {
+              return 'cytoscape';
+            }
+            if (id.includes('recharts')) {
+              return 'recharts';
+            }
+          }
         }
       }
     }

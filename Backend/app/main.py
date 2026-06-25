@@ -1,6 +1,7 @@
 import json
 import hashlib
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -54,7 +55,8 @@ MITRE_CATALOG = []
 MITRE_TECHNIQUE_IDS = []
 
 try:
-    with open("app/data/mitre_catalog.json", "r") as f:
+    _MITRE_PATH = os.path.join(os.path.dirname(__file__), "data", "mitre_catalog.json")
+    with open(_MITRE_PATH, "r") as f:
         MITRE_CATALOG = json.load(f)
     # Flatten all technique IDs for AI constraint
     for tactic_group in MITRE_CATALOG:
